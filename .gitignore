@@ -137,3 +137,63 @@ dist
 # Vite logs files
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
+
+# ===========================
+# Node.js / Backend
+# ===========================
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+package-lock.json
+yarn.lock
+
+# InfluxDB local config / data (if any)
+*.db
+*.sqlite
+influxdb-data/
+
+# Env files
+.env
+.env.local
+.env.*.local
+
+# Logs
+logs/
+*.log
+
+# ===========================
+# React / Frontend
+# ===========================
+build/
+dist/
+*.cache/
+coverage/
+.eslintcache
+public/*.env
+
+# ===========================
+# MQTT / IoT
+# ===========================
+*.pem          # SSL/TLS certificates if any
+*.key
+*.crt
+
+# ===========================
+# VS Code
+# ===========================
+.vscode/
+.history/
+
+# ===========================
+# OS files
+# ===========================
+.DS_Store
+Thumbs.db
+
+# ===========================
+# Misc
+# ===========================
+*.tmp
+*.bak
+

@@ -1,6 +1,6 @@
-import { MetricCard } from "@/components/dashboard/MetricCard";
-import { ChartCard } from "@/components/dashboard/ChartCard";
-import { AlertsList } from "@/components/dashboard/AlertsList";
+import { MetricCard } from "@/components/dashboard/SensorMetrics";
+import { ChartCard } from "@/components/dashboard/HistoryChart";
+import { AlertsList } from "@/components/dashboard/SensorAlerts";
 import { 
   Droplets, 
   Thermometer, 

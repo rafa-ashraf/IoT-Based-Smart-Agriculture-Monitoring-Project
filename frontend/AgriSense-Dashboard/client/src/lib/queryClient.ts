@@ -28,7 +28,8 @@ export const getQueryFn: <T>(options: {
   on401: UnauthorizedBehavior;
 }) => QueryFunction<T> =
   ({ on401: unauthorizedBehavior }) =>
-  async ({ queryKey }) => {
+  async ({ queryKey }) => { //const API = import.meta.env.VITE_API_URL; fetch(`${API}/${queryKey.join("/")}`)
+    //will need to change the code to fetch using the .env folder so that hardcoding the url isn't needed
     const res = await fetch(queryKey.join("/") as string, {
       credentials: "include",
     });

@@ -9,7 +9,10 @@ const mqttClient = require('./mqtt/mqttClient')
 const sensorRoutes = require('./api/sensorRoutes.js')
 
 const app = express()
-app.use(cors())
+app.use(cors({
+origin: 'http://localhost:5173', // frontend dev server
+  credentials: true,
+}));
 app.use(express.json())
 
 app.use('/api/sensors', sensorRoutes)

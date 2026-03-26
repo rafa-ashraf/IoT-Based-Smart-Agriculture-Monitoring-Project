@@ -1,20 +1,21 @@
-// mqtt-to-influx.js
+require('dotenv').config()
+
 const mqtt = require('mqtt')
 const { InfluxDB, Point } = require('@influxdata/influxdb-client')
 
-// --- 1️⃣ InfluxDB configuration ---
-const INFLUXDB_URL = 'http://localhost:8086' // change if remote
-const INFLUXDB_TOKEN = 'zgqzbelOHiSQ2UZoyky3Y56iqWNd60EUrWaic5pIpGep68KgKFU038LtpY6ysBmqfamUx731zySm0GDTkHVgOw=='
-const ORG = 'TMU'
-const BUCKET = 'iot_data'
+// --- 1) InfluxDB configuration ---
+const INFLUXDB_URL = process.env.INFLUXDB_URL
+const INFLUXDB_TOKEN = process.env.INFLUXDB_TOKEN
+const ORG = process.env.ORG
+const BUCKET = process.env.BUCKET
 
 const influxDB = new InfluxDB({ url: INFLUXDB_URL, token: INFLUXDB_TOKEN })
 const writeApi = influxDB.getWriteApi(ORG, BUCKET)
-writeApi.useDefaultTags({ location: 'AM03' }) // optional
+writeApi.useDefaultTags({ location: 'AM03' })
 
-// --- 2️⃣ MQTT configuration ---
-const MQTT_BROKER = 'mqtt://broker.hivemq.com'
-const TOPIC = 'AM03/sensors'
+// --- 2) MQTT configuration ---
+const MQTT_BROKER = process.env.MQTT_BROKER
+const TOPIC = process.env.MQTT_TOPIC
 
 const client = mqtt.connect(MQTT_BROKER)
 
@@ -29,18 +30,42 @@ client.on('connect', () => {
   })
 })
 
-// --- 3️⃣ Handle incoming messages ---
+// --- 3) Handle incoming messages ---
 client.on('message', (topic, message) => {
   try {
     const data = JSON.parse(message.toString())
     console.log(`Received on ${topic}:`, data)
 
-    // --- 4️⃣ Write to InfluxDB ---
-    const point = new Point('sensors')
-      .floatField('temperature', data.temperature)
-      .floatField('humidity', data.humidity)
-      .floatField('soil_moisture', data.soil_moisture)
-      .timestamp(new Date()) // use current timestamp
+    // Basic validation
+    if (
+      !data.device_id ||
+      data.uptime_s === undefined ||
+      data.wifi_rssi_dbm === undefined ||
+      data.temperature_c === undefined ||
+      data.humidity_pct === undefined ||
+      data.pressure_pa === undefined
+    ) {
+      console.warn('Invalid sensor payload:', data)
+      return
+    }
+
+    // --- 4) Write to InfluxDB ---
+    const point = new Point('agri_telemetry')
+      .tag('device_id', String(data.device_id))
+      .intField('uptime_s', Number(data.uptime_s))
+      .intField('wifi_rssi_dbm', Number(data.wifi_rssi_dbm))
+      .floatField('temperature_c', Number(data.temperature_c))
+      .floatField('humidity_pct', Number(data.humidity_pct))
+      .floatField('pressure_pa', Number(data.pressure_pa))
+      .timestamp(new Date())
+
+    if (data.soil_moisture_pct !== undefined && data.soil_moisture_pct !== null) {
+      point.floatField('soil_moisture_pct', Number(data.soil_moisture_pct))
+    }
+
+    if (data.light_raw !== undefined && data.light_raw !== null) {
+      point.floatField('light_raw', Number(data.light_raw))
+    }
 
     writeApi.writePoint(point)
     writeApi
@@ -52,7 +77,7 @@ client.on('message', (topic, message) => {
   }
 })
 
-// --- 5️⃣ Handle connection errors ---
+// --- 5) Handle shutdown cleanly ---
 process.on('SIGINT', () => {
   console.log('Closing InfluxDB writeApi...')
   writeApi

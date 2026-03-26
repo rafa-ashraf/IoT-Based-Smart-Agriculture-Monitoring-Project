@@ -13,19 +13,33 @@ const writeApi = influxDB.getWriteApi(
 
 function writeSensorData(data) {
   if (
-    typeof data.temperature !== 'number' ||
-    typeof data.humidity !== 'number' ||
-    typeof data.soil_moisture !== 'number'
+    typeof data.device_id !== 'string' ||
+    typeof data.uptime_s !== 'number' ||
+    typeof data.wifi_rssi_dbm !== 'number' ||
+    typeof data.temperature_c !== 'number' ||
+    typeof data.humidity_pct !== 'number' ||
+    typeof data.pressure_pa !== 'number'
   ) {
     console.warn('⚠️ Invalid sensor payload:', data)
     return
   }
 
-  const point = new Point('sensors')
-    .floatField('temperature', data.temperature)
-    .floatField('humidity', data.humidity)
-    .intField('soil_moisture', data.soil_moisture)
+  const point = new Point('agri_telemetry')
+    .tag('device_id', data.device_id)
+    .intField('uptime_s', data.uptime_s)
+    .intField('wifi_rssi_dbm', data.wifi_rssi_dbm)
+    .floatField('temperature_c', data.temperature_c)
+    .floatField('humidity_pct', data.humidity_pct)
+    .floatField('pressure_pa', data.pressure_pa)
     .timestamp(new Date())
+
+  if (typeof data.soil_moisture_pct === 'number') {
+    point.floatField('soil_moisture_pct', data.soil_moisture_pct)
+  }
+
+  if (typeof data.light_raw === 'number') {
+    point.floatField('light_raw', data.light_raw)
+  }
 
   writeApi.writePoint(point)
 }

@@ -5,8 +5,13 @@ const client = mqtt.connect(process.env.MQTT_BROKER)
 
 client.on('connect', () => {
   console.log('✅ Connected to MQTT broker')
-  console.log('📡 Subscribed to:', process.env.MQTT_TOPIC)
-  client.subscribe(process.env.MQTT_TOPIC)
+  client.subscribe(process.env.MQTT_TOPIC, (err) => {
+    if (err) {
+      console.error('❌ Subscribe failed:', err)
+    } else {
+      console.log('📡 Subscribed to:', process.env.MQTT_TOPIC)
+    }
+  })
 })
 
 client.on('message', (topic, message) => {

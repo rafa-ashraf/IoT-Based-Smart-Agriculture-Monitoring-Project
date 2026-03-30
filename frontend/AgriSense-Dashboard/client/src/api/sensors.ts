@@ -1,28 +1,41 @@
 const API = import.meta.env.VITE_API_URL;
 
-export async function getSensors() {
-  const response = await fetch(`${API}/api/sensors/temperature`);
-  
-  if (!response.ok) {
-    throw new Error("Failed to fetch temperature");
-  }
-
-  return response.json();
-}
-export async function getHumidity() {
-  const res = await fetch(`${API}/api/sensors/humidity`);
-  if (!res.ok) throw new Error("Failed to fetch humidity");
-  return res.json();
+export async function getSensorLatest(deviceId: string) {
+  const res = await fetch(`${API}/api/sensors/${deviceId}`);
+  if (!res.ok) throw new Error("Failed to fetch latest sensor data");
+  return res.json(); // { temperature, humidity, moisture, light, status }
 }
 
-export async function getMoisture() {
-  const res = await fetch(`${API}/api/sensors/moisture`);
-  if (!res.ok) throw new Error("Failed to fetch moisture");
-  return res.json();
+export async function getSensorHistory(
+  deviceId: string,
+  field: "temperature" | "humidity" | "moisture" | "light",
+  range: "24h" | "7d" | "1m" = "24h"
+) {
+  // Map frontend field to backend field
+  const fieldMap: Record<string, string> = {
+    temperature: "temperature_c",
+    humidity: "humidity_pct",
+    moisture: "soil_moisture_pct",
+    light: "light_raw"
+  };
+
+  const res = await fetch(
+    `${API}/api/sensors/${deviceId}/history?field=${fieldMap[field]}&range=${range}`
+  );
+  if (!res.ok) throw new Error("Failed to fetch sensor history");
+  return res.json(); // [{ value, timestamp }]
+}
+export interface Alert {
+  id: string;
+  message: string;
+  severity: "low" | "medium" | "critical";
+  zoneId: string;
+  timestamp: string;
 }
 
-export async function getTemperatureHistory() {
-  const res = await fetch(`${API}/api/sensors/temperature/history`);
-  if (!res.ok) throw new Error("Failed to fetch temperature history");
+// Fetch active alerts from backend
+export async function getActiveAlerts(): Promise<Alert[]> {
+  const res = await fetch(`${API}/api/alerts`);
+  if (!res.ok) throw new Error("Failed to fetch alerts");
   return res.json();
 }

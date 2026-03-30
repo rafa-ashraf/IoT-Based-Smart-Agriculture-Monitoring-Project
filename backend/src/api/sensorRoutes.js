@@ -11,77 +11,100 @@ const influxDB = new InfluxDB({
 const queryApi = influxDB.getQueryApi(process.env.ORG);
 const BUCKET = process.env.BUCKET;
 
-// ------------------------
-// Helper functions
-// ------------------------
+// helper: convert range
+function getRange(range) {
+  switch (range) {
+    case "7d": return "-7d";
+    case "1m": return "-30d";
+    default: return "-24h";
+  }
+}
 
-// Get latest value for a given field
-function queryLatest(field, res) {
+// ========================
+// GET latest sensor data
+// ========================
+router.get('/:deviceId', (req, res) => {
+  const deviceId = req.params.deviceId;
+
   const query = `
     from(bucket: "${BUCKET}")
-      |> range(start: 0)
-      |> filter(fn: (r) => r._field == "${field}")
+      |> range(start: -7d)
+      |> filter(fn: (r) => r._measurement == "agri_telemetry")
+      |> filter(fn: (r) => r.device_id == "${deviceId}")
       |> last()
+      |> pivot(rowKey:["_time"], columnKey: ["_field"], valueColumn: "_value")
   `;
 
-  let sent = null;
+  let result = {};
 
   queryApi.queryRows(query, {
     next(row, tableMeta) {
       const o = tableMeta.toObject(row);
-      if (!sent) {
-        sent = true;
-        res.json({ field: o._field, value: o._value, timestamp: o._time });
-      }
+  
+      console.log("DEBUG values:", o); //debug for testing
+
+      result = {
+        temperature: o.temperature_c,
+        humidity: o.humidity_pct,
+        moisture: o.soil_moisture_pct,
+        light: o.light_raw
+      };
     },
     error(err) {
-      console.error('InfluxDB query error:', err);
-      if (!sent) res.status(500).json({ error: err.message });
+      console.error('InfluxDB error:', err);
+      res.status(500).json({ error: err.message });
     },
     complete() {
-      if (!sent) res.status(404).json({ error: 'No data found' });
+      // simple status logic
+      let status = "optimal";
+      if (result.moisture !== undefined && result.moisture < 20) status = "critical";
+      else if (result.temperature !== undefined && result.temperature > 35) status = "warning";
+
+      res.json({
+        deviceId,
+        ...result,
+        status
+      });
     }
   });
-}
+});
 
-// Get history for a given field (last 24h)
-function queryHistory(field, res) {
-  const query = `
+// ========================
+// GET sensor history (dynamic)
+// Example: /api/sensors/esp32_node_01/history?field=humidity_pct&range=7d&aggregate=1h
+// ------------------------
+router.get('/:deviceId/history', (req, res) => {
+  const deviceId = req.params.deviceId;
+  const field = req.query.field || 'temperature_c';
+  const rangeParam = req.query.range || '24h';
+  const aggregate = req.query.aggregate || (rangeParam === "24h" ? "10m" : "1h");
+
+  const startRange = getRange(rangeParam);
+
+  let query = `
     from(bucket: "${BUCKET}")
-      |> range(start: -24h)
+      |> range(start: ${startRange})
+      |> filter(fn: (r) => r._measurement == "agri_telemetry")
+      |> filter(fn: (r) => r.device_id == "${deviceId}")
       |> filter(fn: (r) => r._field == "${field}")
+      |> aggregateWindow(every: ${aggregate}, fn: mean, createEmpty: false)
       |> sort(columns: ["_time"], desc: false)
   `;
 
   const results = [];
-
   queryApi.queryRows(query, {
     next(row, tableMeta) {
       const o = tableMeta.toObject(row);
       results.push({ value: o._value, timestamp: o._time });
     },
     error(err) {
-      console.error('InfluxDB query error:', err);
+      console.error('InfluxDB error:', err);
       res.status(500).json({ error: err.message });
     },
     complete() {
       res.json(results);
     }
   });
-}
-
-// ------------------------
-// Routes
-// ------------------------
-
-// Latest values
-router.get('/temperature', (req, res) => queryLatest('temperature', res));
-router.get('/humidity', (req, res) => queryLatest('humidity', res));
-router.get('/moisture', (req, res) => queryLatest('soil_moisture', res));
-
-// History (last 24h)
-router.get('/temperature/history', (req, res) => queryHistory('temperature', res));
-router.get('/humidity/history', (req, res) => queryHistory('humidity', res));
-router.get('/moisture/history', (req, res) => queryHistory('soil_moisture', res));
+});
 
 module.exports = router;

@@ -3,7 +3,7 @@ import { mockZones, getHistoryData } from "@/lib/mockData";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, RefreshCw, Download, Sprout } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { ChartCard } from "@/components/dashboard/HistoryChart";
+import { HistoryChart } from "@/components/dashboard/HistoryChart";
 import { MetricCard } from "@/components/dashboard/SensorMetrics";
 import { Droplets, Thermometer, Sun, Wind } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -141,20 +141,20 @@ export default function ZoneDetails() {
 
         <TabsContent value="history" className="space-y-6">
           <div className="grid gap-6">
-            <ChartCard 
+            <HistoryChart 
               title="Soil Moisture Trend" 
               data={moistureData} 
               color="hsl(var(--chart-1))"
               unit="%"
             />
             <div className="grid md:grid-cols-2 gap-6">
-              <ChartCard 
+              <HistoryChart 
                 title="Temperature Trend" 
                 data={tempData} 
                 color="hsl(var(--chart-3))"
                 unit="°C"
               />
-              <ChartCard 
+              <HistoryChart
                 title="Humidity Trend" 
                 data={humidityData} 
                 color="hsl(var(--chart-2))"

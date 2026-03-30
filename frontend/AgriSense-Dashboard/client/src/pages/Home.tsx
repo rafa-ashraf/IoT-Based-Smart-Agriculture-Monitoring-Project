@@ -1,29 +1,36 @@
 import { MetricCard } from "@/components/dashboard/SensorMetrics";
-import { ChartCard } from "@/components/dashboard/HistoryChart";
-import { AlertsList } from "@/components/dashboard/SensorAlerts";
-import { 
-  Droplets, 
-  Thermometer, 
-  Sun, 
-  CloudRain,
-  ArrowRight
-} from "lucide-react";
-import { getHistoryData } from "@/lib/mockData";
+import { HistoryChart } from "@/components/dashboard/HistoryChart"; 
+import { AlertsList } from "@/components/dashboard/AlertsList";
+import { Droplets, Thermometer, Sun, CloudRain, ArrowRight } from "lucide-react";
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Link } from "wouter";
+import { getSensorLatest } from "@/api/sensors";
 
 export default function Home() {
-  const moistureData = getHistoryData("moisture", "24h");
+  const deviceId = "esp32_node_01";
+  const [sensorData, setSensorData] = useState<any>({});
+  const [loading, setLoading] = useState(true);
+
+  const fetchData = () => {
+    setLoading(true);
+    getSensorLatest(deviceId)
+      .then((data) => setSensorData(data))
+      .finally(() => setLoading(false));
+  };
+
+  useEffect(() => {
+    fetchData();
+    const interval = setInterval(fetchData, 10000); // refresh every 10s
+    return () => clearInterval(interval);
+  }, []);
 
   return (
     <div className="space-y-8">
-      {/* Page Header */}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold tracking-tight text-foreground">Dashboard</h1>
-          <p className="text-muted-foreground mt-1">
-            Overview of farm environmental conditions and active alerts.
-          </p>
+          <p className="text-muted-foreground mt-1">Overview of farm environmental conditions and active alerts.</p>
         </div>
         <Link href="/zones">
           <Button className="gap-2 shadow-sm">
@@ -33,63 +40,62 @@ export default function Home() {
         </Link>
       </div>
 
-      {/* Metrics Grid */}
+      {/* Metric Cards */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <MetricCard
           title="Avg Soil Moisture"
-          value="38"
+          value={sensorData.moisture ?? "-"}
           unit="%"
           icon={Droplets}
           trend="down"
           trendValue="2.1%"
-          status="warning"
+          status={sensorData.status ?? "optimal"}
           className="border-l-4 border-l-amber-500"
         />
         <MetricCard
           title="Avg Soil Temp"
-          value="18.2"
+          value={sensorData.temperature ?? "-"}
           unit="°C"
           icon={Thermometer}
           trend="up"
           trendValue="0.4°C"
-          status="optimal"
+          status={sensorData.status ?? "optimal"}
           className="border-l-4 border-l-emerald-500"
         />
         <MetricCard
           title="Avg Air Humidity"
-          value="45"
+          value={sensorData.humidity ?? "-"}
           unit="%"
           icon={CloudRain}
           trend="neutral"
           trendValue="0%"
-          status="optimal"
+          status={sensorData.status ?? "optimal"}
           className="border-l-4 border-l-blue-500"
         />
         <MetricCard
           title="Light Intensity"
-          value="42k"
-          unit=" lx"
+          value={sensorData.light ?? "-"}
+          unit="lx"
           icon={Sun}
           trend="up"
           trendValue="12k"
-          status="optimal"
+          status={sensorData.status ?? "optimal"}
           className="border-l-4 border-l-yellow-500"
         />
       </div>
 
-      {/* Main Content Grid */}
+      {/* Charts + Alerts */}
       <div className="grid gap-4 md:grid-cols-7 lg:grid-cols-7 h-[500px]">
-        {/* Chart Section */}
         <div className="col-span-4 lg:col-span-5 h-full">
-          <ChartCard 
-            title="Soil Moisture Trends (Global)" 
-            data={moistureData} 
+          <HistoryChart
+            title="Soil Moisture Trends"
+            deviceId={deviceId}
+            field="moisture" // frontend name; backend mapping is handled
             color="hsl(var(--chart-1))"
             unit="%"
           />
         </div>
 
-        {/* Alerts Section */}
         <div className="col-span-3 lg:col-span-2 h-full">
           <AlertsList />
         </div>

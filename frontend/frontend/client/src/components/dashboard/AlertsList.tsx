@@ -3,25 +3,36 @@ import { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { formatDistanceToNow } from "date-fns";
-import { getActiveAlerts, Alert } from "@/api/sensors";
+import { getActiveAlerts, Alert, getSensorAI } from "@/api/sensors";
 
-export function AlertsList() {
+export function AlertsList({includeAI}: { includeAI?: boolean}) {
   const [alerts, setAlerts] = useState<Alert[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const fetchAlerts = () => {
+  const fetchAlerts = async () => {
     setLoading(true);
-    getActiveAlerts()
-      .then(setAlerts)
-      .catch((err) => console.error(err))
-      .finally(() => setLoading(false));
+    try {
+    const active = await getActiveAlerts()
+    let combinedAlerts = active;
+
+    if (includeAI){
+      const aiResp = await getSensorAI("esp32_node_01");
+      if (aiResp.aiAlert) combinedAlerts = [aiResp.aiAlert, ...combinedAlerts];
+    }
+      setAlerts(combinedAlerts);
+  }
+      catch(err) { console.error(err);
+     }
+      finally {
+        setLoading(false);
+      }
   };
 
   useEffect(() => {
     fetchAlerts();
-    const interval = setInterval(fetchAlerts, 10000); // refresh every 10s
+    const interval = setInterval(fetchAlerts, 60000); // refresh every 10s
     return () => clearInterval(interval);
-  }, []);
+  }, [includeAI]);
 
   const getIcon = (alert: Alert) => {
     if (alert.message.toLowerCase().includes("offline")) return WifiOff;
@@ -89,5 +100,5 @@ export function AlertsList() {
         )}
       </CardContent>
     </Card>
-  );
-}
+    );
+  }

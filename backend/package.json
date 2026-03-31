@@ -12,6 +12,8 @@
   "license": "ISC",
   "type": "commonjs",
   "dependencies": {
+    "@google/genai": "^1.47.0",
+    "@google/generative-ai": "^0.24.1",
     "@influxdata/influxdb-client": "^1.35.0",
     "cors": "^2.8.5",
     "dotenv": "^17.2.3",

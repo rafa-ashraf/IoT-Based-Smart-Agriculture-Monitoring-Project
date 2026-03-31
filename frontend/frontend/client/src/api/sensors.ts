@@ -39,3 +39,24 @@ export async function getActiveAlerts(): Promise<Alert[]> {
   if (!res.ok) throw new Error("Failed to fetch alerts");
   return res.json();
 }
+
+//AI frontend integration
+export async function getSensorAI(deviceId: string) {
+  try {
+    const res = await fetch(`${API}/api/sensors/${deviceId}/ai`);
+  
+//debug for AI
+  const text = await res.text(); 
+  console.log("STATUS:", res.status);
+  console.log("RESPONSE:", text);
+
+  if (!res.ok) throw new Error(`Failed AI fetch: ${res.status}`);
+  return JSON.parse(text);
+} catch (err) {
+    console.error("AI fetch failed:", err);
+
+    return {
+      ai: "⚠️ AI unavailable"
+    };
+  }
+}

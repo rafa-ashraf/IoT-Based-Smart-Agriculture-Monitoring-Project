@@ -182,12 +182,10 @@ Sensor data:
 - Soil Moisture: ${sensorData.moisture} %
 - Light: ${sensorData.light}
 
-Return JSON ONLY in this format:
-{
-  "status": "optimal|warning|critical",
-  "reason": "<short explanation>",
-  "action": "<actionable recommendation>"
-}
+Give a short answer like:
+Status: optimal/warning/critical
+Reason: <short explanation>
+Action: <recommendation>
 `;
 
         const result = await genAI.models.generateContent({
@@ -195,9 +193,15 @@ Return JSON ONLY in this format:
             contents: prompt,
   });
 
-        const aiText = result.output_text || result.output?.[0]?.content || "";
+        //const aiText = result.output_text || result.output?.[0]?.content || "";
+        const lines = aiText.split("\n").map(l => l.trim()).filter(Boolean);
+const aiJson = {
+  status: lines.find(l => l.startsWith("Status:"))?.split(":")[1]?.trim() || "unknown",
+  reason: lines.find(l => l.startsWith("Reason:"))?.split(":")[1]?.trim() || "AI unavailable",
+  action: lines.find(l => l.startsWith("Action:"))?.split(":")[1]?.trim() || "Check manually"
+};
 
-        let aiJson;
+        /* JSON FORMAT ONLY let aiJson;
         try {
           aiJson = JSON.parse(aiText);
         } catch {
@@ -206,7 +210,7 @@ Return JSON ONLY in this format:
             reason: aiText,
             action: "Check system manually"
           };
-        }
+        }*/
 
         // Map status to severity for alerts
         const severityMap = {

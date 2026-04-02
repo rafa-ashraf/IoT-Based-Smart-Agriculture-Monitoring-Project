@@ -1,40 +1,62 @@
-import { AlertTriangle, WifiOff, Droplets, CheckCircle2 } from "lucide-react";
+import { AlertTriangle, WifiOff, Droplets, Cpu, CheckCircle2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { formatDistanceToNow } from "date-fns";
-import { getActiveAlerts, Alert, getSensorAI } from "@/api/sensors";
+import { getActiveAlerts, getAIInsights, Alert } from "@/api/sensors";
 
-export function AlertsList({includeAI}: { includeAI?: boolean}) {
+interface AlertsListProps {
+  includeAI?: boolean;
+}
+
+export function AlertsList({ includeAI = true }: AlertsListProps) {
   const [alerts, setAlerts] = useState<Alert[]>([]);
   const [loading, setLoading] = useState(true);
 
   const fetchAlerts = async () => {
     setLoading(true);
     try {
-    const active = await getActiveAlerts()
-    let combinedAlerts = active;
+      const activeAlerts = await getActiveAlerts();
+      let combinedAlerts = [...activeAlerts];
 
-    if (includeAI){
-      const aiResp = await getSensorAI("esp32_node_01");
-      if (aiResp.aiAlert) combinedAlerts = [aiResp.aiAlert, ...combinedAlerts];
-    }
-      setAlerts(combinedAlerts);
-  }
-      catch(err) { console.error(err);
-     }
-      finally {
-        setLoading(false);
+      if (includeAI) {
+        const aiResp = await getAIInsights("esp32_node_01");
+        if (aiResp?.aiAlert) {
+          // Mark it clearly as AI‑derived
+          combinedAlerts.unshift({
+            ...aiResp.aiAlert,
+            id: aiResp.aiAlert.id || `ai-${Date.now()}`,
+            aiInsight: aiResp.aiAlert.aiInsight || "",
+          });
+        }
       }
+
+      // Order by severity, then most recent first
+      combinedAlerts.sort((a, b) => {
+        const order = { critical: 0, medium: 1, low: 2 };
+        if (order[a.severity] !== order[b.severity]) {
+          return order[a.severity] - order[b.severity];
+        }
+        return new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime();
+      });
+
+      setAlerts(combinedAlerts);
+    } catch (err) {
+      console.error("Failed to fetch alerts:", err);
+      setAlerts([]);
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => {
     fetchAlerts();
-    const interval = setInterval(fetchAlerts, 60000); // refresh every 10s
+    const interval = setInterval(fetchAlerts, 60000);
     return () => clearInterval(interval);
   }, [includeAI]);
 
   const getIcon = (alert: Alert) => {
+    if (alert.id.startsWith("ai-")) return Cpu;
     if (alert.message.toLowerCase().includes("offline")) return WifiOff;
     if (alert.message.toLowerCase().includes("moisture")) return Droplets;
     return AlertTriangle;
@@ -87,11 +109,20 @@ export function AlertsList({includeAI}: { includeAI?: boolean}) {
                   <p className="font-medium text-sm leading-none text-foreground">
                     {alert.message}
                   </p>
+                  {alert.aiInsight && (
+                    <p className="text-xs text-gray-700 italic">
+                      AI Insight: {alert.aiInsight}
+                    </p>
+                  )}
                   <div className="flex items-center gap-2 text-xs text-muted-foreground">
                     <span className="font-mono bg-background px-1.5 py-0.5 rounded border">
                       {alert.zoneId.toUpperCase()}
                     </span>
-                    <span>{formatDistanceToNow(new Date(alert.timestamp), { addSuffix: true })}</span>
+                    <span>
+                      {formatDistanceToNow(new Date(alert.timestamp), {
+                        addSuffix: true,
+                      })}
+                    </span>
                   </div>
                 </div>
               </div>
@@ -100,5 +131,5 @@ export function AlertsList({includeAI}: { includeAI?: boolean}) {
         )}
       </CardContent>
     </Card>
-    );
-  }
+  );
+}

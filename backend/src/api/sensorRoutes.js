@@ -1,18 +1,22 @@
 const express = require('express');
 const router = express.Router();
 const { InfluxDB } = require('@influxdata/influxdb-client');
-const { GoogleGenAI } = require("@google/genai");
+const { GoogleGenAI } = require('@google/genai');
 
-// Initialize InfluxDB client
+// ========================
+// INIT CLIENTS
+// ========================
 const influxDB = new InfluxDB({
   url: process.env.INFLUXDB_URL,
-  token: process.env.INFLUXDB_TOKEN
+  token: process.env.INFLUXDB_TOKEN,
 });
-
 const queryApi = influxDB.getQueryApi(process.env.ORG);
 const BUCKET = process.env.BUCKET;
+const genAI = new GoogleGenAI(process.env.GEMINI_API_KEY);
 
-// helper: convert range
+// ========================
+// HELPERS
+// ========================
 function getRange(range) {
   switch (range) {
     case "7d": return "-7d";
@@ -20,10 +24,21 @@ function getRange(range) {
     default: return "-24h";
   }
 }
-const genAI = new GoogleGenAI(process.env.GEMINI_API_KEY);
+
+// Simple retry utility for AI calls
+async function retry(fn, retries = 3, delay = 2000) {
+  for (let i = 0; i < retries; i++) {
+    try {
+      return await fn();
+    } catch (e) {
+      if (i === retries - 1) throw e;
+      await new Promise(r => setTimeout(r, delay));
+    }
+  }
+}
 
 // ========================
-// GET latest sensor data
+// GET LATEST SENSOR DATA
 // ========================
 router.get('/:deviceId', (req, res) => {
   const deviceId = req.params.deviceId;
@@ -42,48 +57,38 @@ router.get('/:deviceId', (req, res) => {
   queryApi.queryRows(query, {
     next(row, tableMeta) {
       const o = tableMeta.toObject(row);
-  
-      console.log("DEBUG values:", o); //debug for testing
-
       result = {
         temperature: o.temperature_c,
         humidity: o.humidity_pct,
         moisture: o.soil_moisture_pct,
-        light: o.light_raw
+        light: o.light_raw,
       };
     },
-    error(err) {
+    error: (err) => {
       console.error('InfluxDB error:', err);
       res.status(500).json({ error: err.message });
     },
     complete() {
-      // simple status logic
       let status = "optimal";
       if (result.moisture !== undefined && result.moisture < 20) status = "critical";
       else if (result.temperature !== undefined && result.temperature > 35) status = "warning";
 
-      res.json({
-        deviceId,
-        ...result,
-        status
-      });
-    }
+      res.json({ deviceId, ...result, status });
+    },
   });
 });
 
 // ========================
-// GET sensor history (dynamic)
-// Example: /api/sensors/esp32_node_01/history?field=humidity_pct&range=7d&aggregate=1h
-// ------------------------
+// GET HISTORY (FIELD + RANGE)
+// ========================
 router.get('/:deviceId/history', (req, res) => {
   const deviceId = req.params.deviceId;
   const field = req.query.field || 'temperature_c';
   const rangeParam = req.query.range || '24h';
   const aggregate = req.query.aggregate || (rangeParam === "24h" ? "10m" : "1h");
-
   const startRange = getRange(rangeParam);
 
-  let query = `
+  const query = `
     from(bucket: "${BUCKET}")
       |> range(start: ${startRange})
       |> filter(fn: (r) => r._measurement == "agri_telemetry")
@@ -100,40 +105,17 @@ router.get('/:deviceId/history', (req, res) => {
       results.push({ value: o._value, timestamp: o._time });
     },
     error(err) {
-      console.error('InfluxDB error:', err);
+      console.error("InfluxDB error:", err);
       res.status(500).json({ error: err.message });
     },
     complete() {
       res.json(results);
-    }
+    },
   });
 });
 
-/* const { analyzeSensorData } = require("../services/geminiService");
-
-router.get('/:deviceId/ai', async (req, res) => {
-  try {
-    const deviceId = req.params.deviceId;
-
-    // reuse your existing latest query logic
-    const sensorData = await getLatestSensorData(deviceId); // extract this into a helper
-
-    const aiResponse = await analyzeSensorData(sensorData);
-
-    res.json({
-      deviceId,
-      ...sensorData,
-      ai: aiResponse
-    });
-
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: "AI analysis failed" });
-  }
-});*/
-
 // ========================
-// GET AI insights
+// GET AI INSIGHTS (Smart Alert)
 // ========================
 router.get('/:deviceId/ai', (req, res) => {
   const deviceId = req.params.deviceId;
@@ -152,72 +134,57 @@ router.get('/:deviceId/ai', (req, res) => {
   queryApi.queryRows(query, {
     next(row, tableMeta) {
       const o = tableMeta.toObject(row);
-
       sensorData = {
         temperature: o.temperature_c,
         humidity: o.humidity_pct,
         moisture: o.soil_moisture_pct,
-        light: o.light_raw
+        light: o.light_raw,
       };
     },
-
     async complete() {
       try {
         if (!sensorData) {
           return res.status(404).json({ error: "No sensor data found" });
         }
-/*if (sensorData.moisture > 95) {
-  return res.json({
-    deviceId,
-    ...sensorData,
-    ai: "Soil moisture is already very high. No irrigation needed."
-  });
-}*/
+
         const prompt = `
-You are an agricultural expert. Analyze this sensor data:
+You are an agricultural expert.
 
-Sensor data:
-- Temperature: ${sensorData.temperature} °C
-- Humidity: ${sensorData.humidity} %
-- Soil Moisture: ${sensorData.moisture} %
-- Light: ${sensorData.light}
+Analyze:
+Temperature: ${sensorData.temperature} °C
+Humidity: ${sensorData.humidity} %
+Soil Moisture: ${sensorData.moisture} %
+Light: ${sensorData.light}
 
-Give a short answer like:
+Respond EXACTLY in this format:
 Status: optimal/warning/critical
-Reason: <short explanation>
-Action: <recommendation>
-`;
+Reason: one short sentence
+Action: one short recommendation
+        `;
 
-        const result = await genAI.models.generateContent({
-           model: "gemini-2.5-flash",
-            contents: prompt,
-  });
+        // Merge all context into a natural multi-turn prompt
+const mergedPrompt = fullContext
+  .map((m) => `(${m.role.toUpperCase()}) ${m.content}`)
+  .join("\n\n");
 
-        //const aiText = result.output_text || result.output?.[0]?.content || "";
+const result = await genAI.models.generateContent({
+  model: "gemini-2.5-flash",
+  contents: mergedPrompt,
+});
+
+        const aiText = result.output_text || "";
         const lines = aiText.split("\n").map(l => l.trim()).filter(Boolean);
-const aiJson = {
-  status: lines.find(l => l.startsWith("Status:"))?.split(":")[1]?.trim() || "unknown",
-  reason: lines.find(l => l.startsWith("Reason:"))?.split(":")[1]?.trim() || "AI unavailable",
-  action: lines.find(l => l.startsWith("Action:"))?.split(":")[1]?.trim() || "Check manually"
-};
+        const aiJson = {
+          status: lines.find(l => l.startsWith("Status:"))?.split(":")[1]?.trim() || "unknown",
+          reason: lines.find(l => l.startsWith("Reason:"))?.split(":")[1]?.trim() || "AI unavailable",
+          action: lines.find(l => l.startsWith("Action:"))?.split(":")[1]?.trim() || "Check manually",
+        };
 
-        /* JSON FORMAT ONLY let aiJson;
-        try {
-          aiJson = JSON.parse(aiText);
-        } catch {
-          aiJson = {
-            status: "unknown",
-            reason: aiText,
-            action: "Check system manually"
-          };
-        }*/
-
-        // Map status to severity for alerts
         const severityMap = {
           optimal: "low",
           warning: "medium",
           critical: "critical",
-          unknown: "medium"
+          unknown: "medium",
         };
 
         res.json({
@@ -226,34 +193,77 @@ const aiJson = {
           ai: aiJson,
           aiAlert: {
             id: `ai-${Date.now()}`,
-            message: `${aiJson.reason} | Action: ${aiJson.action}`,
-            severity: severityMap[aiJson.status] || "medium",
+            message: aiJson.reason,
+            aiInsight: aiJson.action,
+            severity: severityMap[aiJson.status],
             zoneId: deviceId,
-            timestamp: new Date().toISOString()
-          }
+            timestamp: new Date().toISOString(),
+          },
         });
       } catch (err) {
         console.error("AI ERROR:", err);
-        // FALLBACK RESPONSE (IMPORTANT)
-    res.json({
-      deviceId,
-      ...sensorData,
-                ai: { status: "unknown", reason: "AI unavailable", action: "Check manually" },
+        res.json({
+          deviceId,
+          ...sensorData,
+          ai: { status: "unknown", reason: "AI unavailable", action: "Check manually" },
           aiAlert: {
             id: `ai-${Date.now()}`,
             message: "AI temporarily unavailable. Check manually.",
             severity: "medium",
             zoneId: deviceId,
-            timestamp: new Date().toISOString()
-          }
+            timestamp: new Date().toISOString(),
+          },
         });
       }
     },
-
     error(err) {
       console.error("Influx ERROR:", err);
       res.status(500).json({ error: err.message });
-    }
+    },
   });
 });
+
+// ========================
+// POST CHAT MESSAGE (fixed for @google/genai)
+// ========================
+router.post('/:deviceId/chat', async (req, res) => {
+  try {
+    const { deviceId } = req.params;
+    const { message, conversation } = req.body;
+
+    if (!message) return res.status(400).json({ error: "No message provided" });
+
+    // ✅ The "system" message is just part of the user's prompt — not a real chat role.
+    const systemInstructions = `
+You are an AI agricultural assistant built into the farm monitoring dashboard.
+Your role: explain sensor data, interpret alerts, and give farming recommendations.
+
+Tone: friendly, practical, and clear.
+If the question is vague, politely ask for clarification.
+Never say you can control devices.
+`;
+
+    // ✅ Build a single flattened prompt Gemini accepts
+    let prompt = `${systemInstructions}\n\n`;
+    if (conversation && Array.isArray(conversation)) {
+      for (const c of conversation) {
+        prompt += `${c.role.toUpperCase()}: ${c.content}\n`;
+      }
+    }
+    prompt += `USER: ${message}\nMODEL:`; // end with MODEL cue for best response context
+
+    // ✅ Generate content (note: only "USER" and "MODEL" roles are valid internally)
+    const result = await genAI.models.generateContent({
+      model: "gemini-2.5-flash",
+      contents: prompt,
+    });
+
+    const reply = result.output_text?.trim() || "I'm not sure — could you clarify that?";
+    res.json({ deviceId, reply });
+  } catch (err) {
+    console.error("Chat ERROR:", err);
+    res.status(500).json({ error: "AI chat failed" });
+  }
+});
+
 module.exports = router;

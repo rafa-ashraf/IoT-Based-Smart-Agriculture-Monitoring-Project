@@ -1,4 +1,4 @@
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+/*import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 export function AICard({ text, loading }: { text: string; loading: boolean }) {
   return (
@@ -16,4 +16,4 @@ export function AICard({ text, loading }: { text: string; loading: boolean }) {
       </CardContent>
     </Card>
   );
-}
+}*/

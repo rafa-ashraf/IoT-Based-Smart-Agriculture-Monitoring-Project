@@ -18,7 +18,7 @@ const thresholds = {
 // GET /api/alerts
 router.get('/', async (req, res) => {
   try {
-    const devices = ["esp32_node_01"]; // list your devices here or fetch dynamically
+    const devices = ["esp32_node_01"]; // list devices here or fetch dynamically
     const alerts = [];
 
     const now = new Date();

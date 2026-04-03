@@ -27,7 +27,7 @@ interface HistoryChartProps {
 }
 
 export function HistoryChart({ title, deviceId, field, color = "hsl(var(--primary))", unit }: HistoryChartProps) {
-  const [range, setRange] = useState<"24h" | "7d" | "1m">("24h");
+  const [range, setRange] = useState<"24h" | "7d" | "30d" | "90d">("24h");
   const [data, setData] = useState<Reading[]>([]);
   const [loading, setLoading] = useState(false);
 
@@ -44,7 +44,7 @@ export function HistoryChart({ title, deviceId, field, color = "hsl(var(--primar
       <CardHeader className="flex flex-row items-center justify-between pb-4">
         <CardTitle className="text-base font-semibold">{title}</CardTitle>
         <div className="flex items-center gap-1 bg-muted/50 p-1 rounded-lg">
-          {(["24h", "7d", "1m"] as const).map((r) => (
+          {(["24h", "7d", "30d", "90d"] as const).map((r) => (
             <Button
               key={r}
               variant={range === r ? "secondary" : "ghost"}

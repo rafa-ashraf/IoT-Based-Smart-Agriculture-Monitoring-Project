@@ -1,5 +1,5 @@
-import { useRoute, Link } from "wouter";
-import { mockZones, getHistoryData } from "@/lib/mockData";
+ import { useRoute, Link } from "wouter";
+import { mockZones } from "@/lib/mockData";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, RefreshCw, Download, Sprout } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -24,10 +24,8 @@ export default function ZoneDetails() {
     );
   }
 
-  // Generate fake history for this zone
-  const moistureData = getHistoryData("moisture", "24h");
-  const tempData = getHistoryData("temp", "24h");
-  const humidityData = getHistoryData("humidity", "24h");
+  // Showcase page: use a stable demo device for chart rendering.
+  const demoDeviceId = "esp32_node_01";
 
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
@@ -143,20 +141,23 @@ export default function ZoneDetails() {
           <div className="grid gap-6">
             <HistoryChart 
               title="Soil Moisture Trend" 
-              data={moistureData} 
+              deviceId={demoDeviceId}
+              field="moisture"
               color="hsl(var(--chart-1))"
               unit="%"
             />
             <div className="grid md:grid-cols-2 gap-6">
               <HistoryChart 
                 title="Temperature Trend" 
-                data={tempData} 
+                deviceId={demoDeviceId}
+                field="temperature"
                 color="hsl(var(--chart-3))"
-                unit="°C"
+                unit="C"
               />
               <HistoryChart
                 title="Humidity Trend" 
-                data={humidityData} 
+                deviceId={demoDeviceId}
+                field="humidity"
                 color="hsl(var(--chart-2))"
                 unit="%"
               />
@@ -166,4 +167,4 @@ export default function ZoneDetails() {
       </Tabs>
     </div>
   );
-}
+} 

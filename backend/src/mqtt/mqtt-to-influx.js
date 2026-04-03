@@ -68,10 +68,6 @@ client.on('message', (topic, message) => {
     }
 
     writeApi.writePoint(point)
-    writeApi
-      .flush()
-      .then(() => console.log('Point written to InfluxDB'))
-      .catch((err) => console.error('Error writing point:', err))
   } catch (err) {
     console.error('Error parsing MQTT message:', err)
   }

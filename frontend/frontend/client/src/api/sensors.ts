@@ -10,15 +10,17 @@ export interface Alert {
 }
 
 export interface SensorData {
+  deviceId?: string;
   temperature?: number;
   humidity?: number;
   moisture?: number;
   light?: number;
+  timestamp?: string;
   status?: "optimal" | "warning" | "critical";
 }
 
 export interface ConversationMessage {
-  role: "system" | "user" | "assistant";
+  role: "user" | "assistant";
   content: string;
 }
 
@@ -37,7 +39,7 @@ export async function getSensorLatest(deviceId: string): Promise<SensorData> {
 export async function getSensorHistory(
   deviceId: string,
   field: "temperature" | "humidity" | "moisture" | "light",
-  range: "24h" | "7d" | "1m" = "24h"
+  range: "24h" | "7d" | "30d" | "90d" = "24h"
 ): Promise<{ value: number; timestamp: string }[]> {
   const fieldMap: Record<string, string> = {
     temperature: "temperature_c",
@@ -57,9 +59,76 @@ export async function getSensorHistory(
 // FETCH ACTIVE ALERTS
 // ========================
 export async function getActiveAlerts(): Promise<Alert[]> {
-  const res = await fetch(`${API}/api/alerts`);
+  const res = await fetch(`${API}/api/sensors/alerts`);
   if (!res.ok) throw new Error("Failed to fetch alerts");
-  return res.json();
+  const raw = await res.json();
+  if (!Array.isArray(raw)) return [];
+
+  return raw.map((item: any, idx: number) => {
+    const status = item?.status;
+    const severity: Alert["severity"] =
+      status === "critical" ? "critical" : status === "warning" ? "medium" : "low";
+    return {
+      id: `${item?.deviceId || "device"}-${idx}-${Date.now()}`,
+      message: String(item?.reason || "No details available"),
+      severity,
+      zoneId: String(item?.deviceId || "unknown"),
+      timestamp: new Date().toISOString(),
+      aiInsight: String(item?.action || ""),
+    };
+  });
+}
+
+export async function getSensorsOverview(): Promise<SensorData[]> {
+  const res = await fetch(`${API}/api/sensors`);
+  if (!res.ok) throw new Error("Failed to fetch sensor overview");
+  const raw = await res.json();
+
+  const rows = Array.isArray(raw)
+    ? raw
+    : Array.isArray(raw?.devices)
+      ? raw.devices
+      : [];
+
+  const toNumber = (v: any): number | undefined => {
+    if (v === null || v === undefined || v === "") return undefined;
+    const n = Number(v);
+    return Number.isFinite(n) ? n : undefined;
+  };
+
+  return rows.map((row: any, idx: number) => {
+    const deviceId =
+      String(
+        row?.deviceId ??
+        row?.device_id ??
+        row?.id ??
+        row?.zoneId ??
+        row?._id ??
+        ""
+      ).trim() || `device-${idx + 1}`;
+
+    const moisture = toNumber(row?.moisture ?? row?.soil_moisture_pct);
+    const temperature = toNumber(row?.temperature ?? row?.temperature_c);
+    const humidity = toNumber(row?.humidity ?? row?.humidity_pct);
+    const light = toNumber(row?.light ?? row?.light_raw);
+
+    let status: SensorData["status"] = row?.status;
+    if (!status) {
+      if (moisture !== undefined && moisture < 20) status = "critical";
+      else if (temperature !== undefined && temperature > 35) status = "warning";
+      else status = "optimal";
+    }
+
+    return {
+      deviceId,
+      moisture,
+      temperature,
+      humidity,
+      light,
+      timestamp: row?.timestamp ?? row?._time ?? undefined,
+      status,
+    };
+  });
 }
 
 // ========================
@@ -85,14 +154,6 @@ export async function getAIInsights(
   }
 }
 
-// ========================
-// CHATBOT
-// ========================
-export interface ConversationMessage {
-  role: "system" | "user" | "assistant";
-  content: string;
-}
-
 export async function sendChatMessage(
   deviceId: string,
   message: string,
@@ -105,14 +166,15 @@ export async function sendChatMessage(
       body: JSON.stringify({ message, conversation }),
     });
 
-    if (!res.ok) throw new Error(`Chat failed: ${res.status}`);
+    if (!res.ok) {
+      const fallbackText = await res.text().catch(() => "");
+      throw new Error(fallbackText || `Chat failed: ${res.status}`);
+    }
 
-    const data = await res.json();
-    return { reply: data.reply ?? "AI unavailable" };
+    const data = await res.json().catch(() => ({}));
+    return { reply: data.reply ?? "I couldn't generate a response right now." };
   } catch (err) {
     console.error("Chat failed:", err);
-    return { reply: "AI unavailable" };
+    return { reply: "I couldn't generate a response right now. Please try again." };
   }
 }
-
-

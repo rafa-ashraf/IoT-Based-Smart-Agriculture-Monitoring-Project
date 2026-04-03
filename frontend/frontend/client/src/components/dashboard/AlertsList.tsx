@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { formatDistanceToNow } from "date-fns";
-import { getActiveAlerts, getAIInsights, Alert } from "@/api/sensors";
+import { getActiveAlerts, Alert } from "@/api/sensors";
 
 interface AlertsListProps {
   includeAI?: boolean;
@@ -17,19 +17,7 @@ export function AlertsList({ includeAI = true }: AlertsListProps) {
     setLoading(true);
     try {
       const activeAlerts = await getActiveAlerts();
-      let combinedAlerts = [...activeAlerts];
-
-      if (includeAI) {
-        const aiResp = await getAIInsights("esp32_node_01");
-        if (aiResp?.aiAlert) {
-          // Mark it clearly as AI‑derived
-          combinedAlerts.unshift({
-            ...aiResp.aiAlert,
-            id: aiResp.aiAlert.id || `ai-${Date.now()}`,
-            aiInsight: aiResp.aiAlert.aiInsight || "",
-          });
-        }
-      }
+      const combinedAlerts = [...activeAlerts];
 
       // Order by severity, then most recent first
       combinedAlerts.sort((a, b) => {

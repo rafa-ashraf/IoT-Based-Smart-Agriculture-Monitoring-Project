@@ -3,12 +3,14 @@ import { cn } from "@/lib/utils";
 import { 
   LayoutDashboard, 
   Map, 
+  Cpu,
   Settings, 
   Sprout, 
   LogOut, 
   Bell, 
   Sun, 
-  Moon 
+  Moon,
+  Bot
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useState, useEffect } from "react";
@@ -38,7 +40,9 @@ export function AppShell({ children }: AppShellProps) {
 
   const navItems = [
     { href: "/", icon: LayoutDashboard, label: "Dashboard" },
-    { href: "/zones", icon: Map, label: "Sensors" },
+    { href: "/sensors", icon: Cpu, label: "Sensors" },
+    { href: "/assistant", icon: Bot, label: "Assistant" },
+    { href: "/zones", icon: Map, label: "Zones" },
     { href: "/crops", icon: Sprout, label: "Crop Management" }, // Placeholder
     // Placeholder
   ];

@@ -1,30 +1,27 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { sendChatMessage, ConversationMessage } from "@/api/sensors";
+import { cn } from "@/lib/utils";
 
 interface Message {
   from: "user" | "ai";
   text: string;
 }
 
-export function ChatBot({ deviceId }: { deviceId: string }) {
-  const [messages, setMessages] = useState<Message[]>([]);
+export function ChatBot({ deviceId, className }: { deviceId: string; className?: string }) {
+  const [messages, setMessages] = useState<Message[]>([
+    {
+      from: "ai",
+      text: "Ask me about this device's moisture, temperature, humidity, or what action to take next.",
+    },
+  ]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
+  const listRef = useRef<HTMLDivElement>(null);
 
-  const systemInstructions = `
-You are an AI agricultural assistant built into the farm monitoring dashboard.
-Your job is to help the user interpret sensor data, explain alerts, and provide practical advice.
-
-Tone & Style:
-- Friendly, encouraging, and concise.
-- Offer short explanations and suggest next steps.
-- If a question is vague, ask politely for clarification.
-- After asking for clarification try to use knwoledge from web data to offer insight. 
-
-Limitations:
-- You cannot change device settings.
-- If you lack data, ask which device or sensor the user means.
-`;
+  useEffect(() => {
+    if (!listRef.current) return;
+    listRef.current.scrollTop = listRef.current.scrollHeight;
+  }, [messages, loading]);
 
   const sendMessage = async () => {
     const userMsg = input.trim();
@@ -35,15 +32,10 @@ Limitations:
     setLoading(true);
 
     try {
-      // Gemini @google/genai only supports USER and MODEL
-const conversation: ConversationMessage[] = [
-  { role: "user", content: systemInstructions },
-  ...messages.map((m) => ({
-    role: (m.from === "user" ? "user" : "model") as ConversationMessage["role"],
-    content: m.text,
-  })),
-  { role: "user", content: userMsg },
-];
+      const conversation: ConversationMessage[] = messages.map((m) => ({
+        role: m.from === "user" ? "user" : "assistant",
+        content: m.text,
+      }));
 
       const { reply } = await sendChatMessage(deviceId, userMsg, conversation);
       setMessages((prev) => [...prev, { from: "ai", text: reply }]);
@@ -53,7 +45,7 @@ const conversation: ConversationMessage[] = [
         ...prev,
         {
           from: "ai",
-          text: "Sorry, I couldn’t process that right now — please try again in a moment.",
+          text: "I couldn't process that right now. Please try again in a moment.",
         },
       ]);
     } finally {
@@ -62,26 +54,26 @@ const conversation: ConversationMessage[] = [
   };
 
   return (
-    <div className="border rounded-lg p-4 w-full max-w-md flex flex-col gap-2 shadow-lg">
+    <div className={cn("border rounded-lg p-4 w-full flex flex-col gap-2 shadow-lg bg-background", className)}>
       <h2 className="text-lg font-bold flex items-center justify-between">
-        AI Assistant <span className="text-xs text-muted-foreground">🌱 Smart Farm Chat</span>
+        AI Assistant <span className="text-xs text-muted-foreground">Smart Farm Chat</span>
       </h2>
 
-      <div className="flex-1 overflow-y-auto h-64 p-2 border rounded bg-gray-50 space-y-2">
+      <div ref={listRef} className="flex-1 overflow-y-auto h-64 p-2 border rounded bg-muted/30 space-y-2">
         {messages.map((m, i) => (
           <div
             key={i}
             className={`p-2 rounded max-w-[85%] break-words ${
               m.from === "user"
-                ? "bg-blue-100 text-black self-end ml-auto"
-                : "bg-green-100 text-black self-start mr-auto"
+                ? "bg-primary/15 text-foreground self-end ml-auto border border-primary/20"
+                : "bg-card text-card-foreground self-start mr-auto border"
             }`}
           >
             {m.text}
           </div>
         ))}
         {loading && (
-          <div className="text-gray-500 italic text-sm">🤔 Thinking... please wait</div>
+          <div className="text-muted-foreground italic text-sm">Thinking... please wait</div>
         )}
       </div>
 
@@ -98,7 +90,7 @@ const conversation: ConversationMessage[] = [
             loading ? "bg-gray-400" : "bg-blue-500 hover:bg-blue-600"
           }`}
           onClick={sendMessage}
-          disabled={loading}
+          disabled={loading || !input.trim()}
         >
           Send
         </button>

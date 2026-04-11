@@ -221,7 +221,7 @@ async function getAllDeviceIds() {
 async function getLatestTelemetry(deviceId) {
   const queryLatest = `
     from(bucket: "${BUCKET}")
-      |> range(start: -7d)
+      |> range(start: -30d)
       |> filter(fn: (r) => r._measurement == "agri_telemetry")
       |> filter(fn: (r) => r.device_id == "${deviceId}")
       |> last()
@@ -442,7 +442,7 @@ router.get('/:deviceId', (req, res) => {
   const deviceId = req.params.deviceId;
   const query = `
     from(bucket: "${BUCKET}")
-      |> range(start: -7d)
+      |> range(start: -30d)
       |> filter(fn: (r) => r._measurement == "agri_telemetry")
       |> filter(fn: (r) => r.device_id == "${deviceId}")
       |> last()
